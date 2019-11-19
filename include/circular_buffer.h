@@ -1,81 +1,101 @@
-#ifndef CIRCULAR_BUFFER_H_
-#define CIRCULAR_BUFFER_H_
 
-#pragma once
 
-#include <memory.h>
-#include <stdlib.h>
-#include <stdint.h>
+#ifndef CIRCULARQ_H_
+#define CIRCULARQ_H_
 
-#define circular_buffer_type(type) circular_buffer_##type
-#define circular_buffer_vtbl(type) circular_buffer_type(type)##_vtbl
-#define circular_buffer_function(type, name) circular_buffer_type(type)##_##name
-#define circular_buffer_function_signature(type, ...) (struct circular_buffer_type(type) *buf, __VA_ARGS__)
+#include <stdarg.h>
+#include <stddef.h>
 
-#define circular_buffer_import_type(type)									\
-struct circular_buffer_vtbl(type) {											\
-	int(*init)  circular_buffer_function_signature(type, uint32_t);			\
-	int(*empty) circular_buffer_function_signature(type);					\
-	void(*put)  circular_buffer_function_signature(type, type);				\
-	int(*get)  circular_buffer_function_signature(type);					\
-};																			\
-extern const struct circular_buffer_vtbl(type) circular_buffer_vtbl(type);	\
-struct circular_buffer_type(type) {											\
-	struct circular_buffer_vtbl(type) *vtbl;								\
-	type *data;																\
-	uint32_t head, tail;													\
-	uint32_t size;															\
-	uint32_t capacity;														\
-};												
 
-#define circular_buffer(type, name) struct circular_buffer_type(type) name
+#define circularq_type(type)                        circularq_##type
+#define circularq_vtbl_helper(type)                 type##_vtbl
+#define circularq_vtbl(type)                        circularq_vtbl_helper(type)
+#define circularq_function_helper_two(type, name)   type##_##name
+#define circularq_function_helper_one(type, name)   circularq_function_helper_two(type, name)
+#define circularq_function(type, name)              circularq_function_helper_one(circularq_type(type), name)
+#define circularq_function_signature(type, ...)     struct circularq_type(type) *queue, ##__VA_ARGS__
 
-#define circular_buffer_generate_prototypes(type)												\
-int  circular_buffer_function(type, init)  circular_buffer_function_signature(type, uint32_t);	\
-int  circular_buffer_function(type, empty) circular_buffer_function_signature(type);			\
-void circular_buffer_function(type, put)   circular_buffer_function_signature(type);			\
-int circular_buffer_function(type, get)   circular_buffer_function_signature(type);				
+#define circularq_import_type(type)						                                            \
+struct circularq_type(type);                                                                        \
+struct circularq_vtbl(type) {								                                        \
+	int   (*init)   (circularq_function_signature(type, size_t));                                   \
+    int   (*empty)  (circularq_function_signature(type));		                                    \
+	int   (*full)   (circularq_function_signature(type));		                                    \
+	int   (*put)    (circularq_function_signature(type, type));		                                \
+	type *(*get)    (circularq_function_signature(type));			                                \
+};                                                                                                  \
+                                                                                                    \
+extern const struct circularq_vtbl(type) circularq_vtbl(type);	                                    \
+struct circularq_type(type) {									                                    \
+	struct circularq_vtbl(type) *vtbl;							                                    \
+	type *data;													                                    \
+	size_t rd, wr;											                                        \
+	size_t capacity;											                                    \
+    int empty, full;                                                                                \
+};
 
-#define circular_buffer_generate_definitions(type)														\
-const struct circular_buffer_vtbl(type) circular_buffer_vtbl(type) = {									\
-	&circular_buffer_function(type, init),																\
-	&circular_buffer_function(type, empty),																\
-	&circular_buffer_function(type, put),																\
-	&circular_buffer_function(type, get)																\
-};																										\
-int circular_buffer_function(type, init) circular_buffer_function_signature(type, uint32_t capacity)	\
-{																										\
-	buf->data = malloc(capacity * sizeof(type));														\
-	buf->head = 0;																						\
-	buf->tail = 0;																						\
-	buf->size = 0;																						\
-	buf->capacity = capacity;																			\
-}																										\
-int circular_buffer_function(type, empty) circular_buffer_function_signature(type)						\
-{																										\
-	return buf->size == 0;																				\
-}																										\
-void circular_buffer_function(type, put)   circular_buffer_function_signature(type, type data)			\
-{																										\
-	buf->data[buf->head] = data;																		\
-	buf->head = (buf->head + 1) % buf->capacity;														\
-	buf->tail = buf->size == buf->capacity ? (buf->tail + 1) % buf->capacity : buf->tail;				\
-	buf->size = buf->size < buf->capacity ? buf->size + 1 : buf->size;									\
-}																										\
-int circular_buffer_function(type, get)   circular_buffer_function_signature(type)						\
-{																										\
-	--buf->size;																						\
-																										\
-	return buf->data[buf->tail++ % buf->capacity];														\
+#define circularq_import_type_aliased(type, alias)                                                  \
+typedef type alias;                                                                                 \
+circularq_import_type(alias)                                                                        \
+
+#define circularq(type, name) struct circularq_type(type) name
+
+#define circularq_generate_prototypes(type)										    \
+int  circularq_function(type, init)  (circularq_function_signature(type, size_t));	\
+int  circularq_function(type, empty) (circularq_function_signature(type));		    \
+int  circularq_function(type, full)  (circularq_function_signature(type));			\
+int  circularq_function(type, put)   (circularq_function_signature(type, type));	\
+type *circularq_function(type, get)  (circularq_function_signature(type));
+
+#define circularq_generate_definitions(type)														\
+const struct circularq_vtbl(type) circularq_vtbl(type) = {									        \
+	&circularq_function(type, init),																\
+    &circularq_function(type, empty),																\
+	&circularq_function(type, full),																\
+	&circularq_function(type, put),																    \
+	&circularq_function(type, get)																    \
+};																									\
+int circularq_function(type, init)(circularq_function_signature(type, size_t capacity)) {		    \
+    memset(queue, 0, sizeof(*queue));																\
+    queue->capacity = capacity;                                                                     \
+    queue->data = (type *)malloc(sizeof(type) * queue->capacity);                                   \
+    if (!queue->data) {                                                                             \
+        return -1;                                                                                  \
+    }                                                                                               \
+    return 0;                                                                                       \
+}																									\
+int circularq_function(type, empty)(circularq_function_signature(type)) {						    \
+	return queue->empty;																		    \
+}	                                                                                                \
+int circularq_function(type, full)(circularq_function_signature(type)) {						    \
+	return queue->full;																		        \
+}																									\
+int circularq_function(type, put)(circularq_function_signature(type, type data)) {					\
+    if (queue->vtbl->full(queue)) {                                                                 \
+        return -1;                                                                                  \
+    }                                                                                               \
+    queue->data[queue->wr] = data;                                                                  \
+    queue->wr = (queue->wr + 1) & (queue->capacity - 1);                                            \
+    queue->empty = 0;                                                                               \
+    queue->full = (queue->wr == queue->rd);                                                         \
+    return 0;                                                                                       \
+}																									\
+type *circularq_function(type, get)(circularq_function_signature(type)) {	                        \
+    if (queue->vtbl->empty(queue)) {                                                                \
+        return NULL;                                                                                \
+    }                                                                                               \
+    queue->rd = (queue->rd + 1) & (queue->capacity - 1);                                            \
+    queue->full = 0;                                                                                \
+    queue->empty = (queue->wr == queue->rd);                                                        \
+    return &queue->data[(queue->rd - 1) & (queue->capacity - 1)];                                   \
 }
 
-#define circular_buffer_link(type, name) (name).vtbl = &circular_buffer_vtbl(type);
 
-#define circular_buffer_init(buf, size) (buf).vtbl->init(&buf, size)
-
-#define circular_buffer_empty(buf)		(buf).vtbl->empty(&buf)
-
-#define circular_buffer_put(buf, data)  (buf).vtbl->put(&buf, data)
-#define circular_buffer_get(buf)		(buf).vtbl->get(&buf)
+#define circularq_link(type, name)  (name).vtbl = &circularq_vtbl(type);
+#define circularq_init(queue, size) (queue).vtbl->init(&buf, size)
+#define circularq_empty(queue)		(queue).vtbl->empty(&buf)
+#define circularq_full(queue)		(queue).vtbl->full(&buf)
+#define circularq_put(queue, data)  (queue).vtbl->put(&queue, data)
+#define circularq_get(queue)		(queue).vtbl->get(&buf)
 
 #endif
