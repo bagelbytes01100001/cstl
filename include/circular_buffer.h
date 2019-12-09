@@ -1,4 +1,16 @@
-
+/**
+ * @file circularq.h
+ *
+ * generic circular queue implementation
+ *
+ * Copyright 2019
+ * Carnegie Robotics, LLC
+ * 4501 Hatfield Street, Pittsburgh, PA 15201
+ * http://www.carnegierobotics.com
+ *
+ * Significant history (date, user, job code, action):
+ *   2019-11-18, Jeremy Lyda <jlyda@carnegierobotics.com>, 2027, Created file.
+ **/
 
 #ifndef CIRCULARQ_H_
 #define CIRCULARQ_H_
@@ -17,12 +29,14 @@
 #define circularq_import_type(type)						                                                    \
 struct circularq_type(type);                                                                                \
 struct circularq_vtbl(type) {								                                                \
-	int     (*init)    (circularq_function_signature(type, size_t));                                        \
+    int     (*init)    (circularq_function_signature(type, size_t));                                        \
     void    (*free)    (circularq_function_signature(type));                                                \
+    void    (*reset)   (circularq_function_signature(type));                                                \
 	int     (*put)     (circularq_function_signature(type, type));                                          \
     ssize_t (*write)   (circularq_function_signature(type, type *, size_t));                                \
 	int     (*get)     (circularq_function_signature(type, type *));		                                \
     ssize_t (*read)    (circularq_function_signature(type, type *, size_t));                                \
+    int     (*peek)    (circularq_function_signature(type, type *));                                        \
 };                                                                                                          \
                                                                                                             \
 extern struct circularq_vtbl(type) circularq_vtbl(type);	                                                \
@@ -43,19 +57,23 @@ circularq_import_type(alias)                                                    
 #define circularq_generate_prototypes(type)										                            \
 int     circularq_function(type, init)    (circularq_function_signature(type, size_t));	                    \
 void    circularq_function(type, free)    (circularq_function_signature(type));                             \
+void    circularq_function(type, reset)   (circularq_function_signature(type));                             \
 int     circularq_function(type, put)     (circularq_function_signature(type, type));	                    \
 ssize_t circularq_function(type, write)   (circularq_function_signature(type, type *, size_t));             \
 int     circularq_function(type, get)     (circularq_function_signature(type, type *));                     \
-ssize_t circularq_function(type, read)    (circularq_function_signature(type, type *, size_t));
+ssize_t circularq_function(type, read)    (circularq_function_signature(type, type *, size_t));             \
+int     circularq_function(type, peek)    (circularq_function_signature(type, type *));                      
 
 #define circularq_generate_definitions(type)														        \
 struct circularq_vtbl(type) circularq_vtbl(type) = {									                    \
 	&circularq_function(type, init),																        \
     &circularq_function(type, free),                                                                        \
+    &circularq_function(type, reset),                                                                       \
 	&circularq_function(type, put),																            \
     &circularq_function(type, write),                                                                       \
 	&circularq_function(type, get),																            \
-    &circularq_function(type, read)                                                                         \
+    &circularq_function(type, read),                                                                        \
+    &circularq_function(type, peek)                                                                         \
 };																									        \
 int circularq_function(type, init)(circularq_function_signature(type, size_t capacity)) {		            \
     queue->rd = 0U;                                                                                         \
@@ -71,6 +89,13 @@ int circularq_function(type, init)(circularq_function_signature(type, size_t cap
 }																									        \
 void circularq_function(type, free)(circularq_function_signature(type)) {                                   \
     free(queue->data);                                                                                      \
+}                                                                                                           \
+void circularq_function(type, reset)(circularq_function_signature(type)) {                                  \
+    queue->rd = 0U;                                                                                         \
+    queue->wr = 0U;                                                                                         \
+    queue->size = 0U;                                                                                       \
+    queue->empty = 1;                                                                                       \
+    queue->full = 0;                                                                                        \
 }                                                                                                           \
 int circularq_function(type, put)(circularq_function_signature(type, type in)) {					        \
     if (queue->full) {                                                                                      \
@@ -94,35 +119,46 @@ ssize_t circularq_function(type, write)(circularq_function_signature(type, type 
 }                                                                                                           \
 int circularq_function(type, get)(circularq_function_signature(type, type *out)) {	                        \
     if (queue->empty) {                                                                                     \
-        return -1  ;                                                                                        \
+        return -1;                                                                                          \
     }                                                                                                       \
-    *out = queue->data[queue->rd];                                                                          \
+    if (out != NULL) {                                                                                      \
+        *out = queue->data[queue->rd];                                                                      \
+    }                                                                                                       \
     queue->rd = (queue->rd + 1U) & (queue->capacity - 1U);                                                  \
     queue->full = 0;                                                                                        \
     queue->empty = (queue->wr == queue->rd);                                                                \
     queue->size -= 1U;                                                                                      \
     return 0;                                                                                               \
 }                                                                                                           \
-ssize_t circularq_function(type, read) (circularq_function_signature(type, type *buffer, size_t count)) {   \
+ssize_t circularq_function(type, read)(circularq_function_signature(type, type *buffer, size_t count)) {    \
     ssize_t ret, n = 0U;                                                                                    \
     for (; n < count; ++n) {                                                                                \
-        if ((ret = circularq_get(*queue, buffer + n)) != 0) {                                               \
+        if ((ret = circularq_get(*queue, buffer != NULL ? (buffer + n) : NULL)) != 0) {                     \
             return ret;                                                                                     \
         };                                                                                                  \
     }                                                                                                       \
     return n;                                                                                               \
+}                                                                                                           \
+int circularq_function(type, peek)(circularq_function_signature(type, type *out)) {                         \
+    if (queue->empty) {                                                                                     \
+        return -1;                                                                                          \
+    }                                                                                                       \
+    *out = queue->data[queue->rd];                                                                          \
+    return 0;                                                                                               \
 }
 
 #define circularq_link(type, queue)       (queue).vtbl = &circularq_vtbl(type);
-#define circularq_init(queue, size)       (queue).vtbl->init(&queue, size)
-#define circularq_free(queue)             (queue).vtbl->free(&queue);
+#define circularq_init(queue, size)       (queue).vtbl->init(&(queue), (size))
+#define circularq_free(queue)             (queue).vtbl->free(&(queue));
 #define circularq_empty(queue)		      (queue).empty
 #define circularq_full(queue)		      (queue).full
 #define circularq_capacity(queue)         (queue).capacity
 #define circularq_size(queue)		      (queue).size
-#define circularq_put(queue, in)          (queue).vtbl->put(&queue, in)
-#define circularq_write(queue, in, count) (queue).vtbl->write(&queue, in, count)
-#define circularq_get(queue, out)		  (queue).vtbl->get(&queue, out)
-#define circularq_read(queue, out, count) (queue).vtbl->read(&queue, out, count)
+#define circularq_reset(queue)            (queue).vtbl->reset(&(queue))
+#define circularq_put(queue, in)          (queue).vtbl->put(&(queue),   (in))
+#define circularq_write(queue, in, count) (queue).vtbl->write(&(queue), (in), (count))
+#define circularq_get(queue, out)		  (queue).vtbl->get(&(queue),  (out))
+#define circularq_read(queue, out, count) (queue).vtbl->read(&(queue), (out), (count))
+#define circularq_peak(queue, out)        (queue).vtbl->peek(&(queue), (out))
 
 #endif
