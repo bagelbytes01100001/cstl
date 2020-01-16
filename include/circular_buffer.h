@@ -1,17 +1,3 @@
-/**
- * @file circularq.h
- *
- * generic circular queue implementation
- *
- * Copyright 2019
- * Carnegie Robotics, LLC
- * 4501 Hatfield Street, Pittsburgh, PA 15201
- * http://www.carnegierobotics.com
- *
- * Significant history (date, user, job code, action):
- *   2019-11-18, Jeremy Lyda <jlyda@carnegierobotics.com>, 2027, Created file.
- **/
-
 #ifndef CIRCULARQ_H_
 #define CIRCULARQ_H_
 
